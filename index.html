@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>策略推理后端对比 · 190K MLP</title>
+<style>
+  :root {
+    --bg:#0b0f14; --card:#121821; --line:#1f2937; --fg:#e5e7eb; --dim:#94a3b8;
+    --acc:#34d399; --warn:#fbbf24; --bad:#f87171;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; padding:32px 20px 72px; background:var(--bg); color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    line-height:1.65; -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:900px; margin:0 auto; }
+  h1 { font-size:26px; margin:0 0 6px; letter-spacing:-.3px; }
+  .sub { color:var(--dim); font-size:13px; margin-bottom:28px; }
+  .lead {
+    font-size:17px; padding:18px 20px; background:linear-gradient(135deg,#13251f,#121821);
+    border-left:3px solid var(--acc); border-radius:8px; margin:0 0 28px;
+  }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:32px; }
+  .kpi { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .kpi b { display:block; font-size:22px; color:var(--acc); font-variant-numeric:tabular-nums; }
+  .kpi span { font-size:12px; color:var(--dim); }
+  h2 { font-size:16px; margin:34px 0 12px; padding-bottom:8px; border-bottom:1px solid var(--line); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; }
+  .chart { width:100%; height:auto; display:block; }
+  .grid { stroke:#1f2937; stroke-width:1; }
+  .grid.v { stroke-dasharray:3 4; }
+  .axis { fill:#64748b; font-size:11px; }
+  .band { fill:#34d39911; }
+  .band-label { fill:#34d399; font-size:11px; }
+  .legend { display:flex; flex-wrap:wrap; gap:14px; margin-top:10px; font-size:12px; color:var(--dim); }
+  .lg { display:flex; align-items:center; gap:6px; }
+  .lg i { width:10px; height:10px; border-radius:2px; display:inline-block; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { padding:8px 10px; text-align:left; border-bottom:1px solid var(--line); }
+  th { color:var(--dim); font-weight:500; font-size:12px; }
+  td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+  tr.best td { color:var(--acc); }
+  td.win { color:var(--acc); font-weight:600; }
+  .bar { display:block; height:8px; border-radius:4px; min-width:2px; }
+  ul { margin:8px 0 0; padding-left:20px; }
+  li { margin:6px 0; }
+  .note { font-size:12px; color:var(--dim); margin-top:12px; }
+  .quote {
+    background:#0f1620; border:1px solid var(--line); border-radius:10px; padding:16px 18px;
+    font-size:14px; margin:0;
+  }
+  .quote p { margin:0 0 10px; }
+  .warn { color:var(--warn); font-size:12px; border-top:1px dashed var(--line); padding-top:10px; margin-top:10px; }
+  code { background:#0a0f15; padding:1px 5px; border-radius:4px; font-size:12px; color:#7dd3fc; }
+  @media (max-width:560px) { body { padding:20px 14px 56px; } h1 { font-size:21px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>策略推理后端对比</h1>
+  <div class="sub">四足策略 MLP 47→512→256→128→12（190,348 参数）· RTX 4080 SUPER · torch 2.7.0+cu128 · ONNX Runtime 1.31.0 · 2026-10-28</div>
+
+  <p class="lead">
+    <b>19 万参数的策略网络，batch=1 时 CPU 比 GPU 快 2.3 倍</b>——因为 GPU 99.9% 的延迟来自内核启动开销。
+    实时控制该用 ONNX Runtime + CPU；批量离线推理才轮到 GPU（交叉点 batch 8–32）。
+  </p>
+
+  <div class="kpis">
+    <div class="kpi"><b>13 µs</b><span>ORT-CPU 单次推理（p50）</span></div>
+    <div class="kpi"><b>3.15×</b><span>batch=1 时 CPU 相对 GPU 的优势</span></div>
+    <div class="kpi"><b>99.9%</b><span>GPU 延迟中的启动开销占比</span></div>
+    <div class="kpi"><b>0.065%</b><span>推理占 50 Hz 控制预算（20 ms）</span></div>
+  </div>
+
+  <h2>延迟 vs batch size</h2>
+  <div class="card">
+    <svg viewBox="0 0 760 340" class="chart" role="img" aria-label="延迟随 batch 变化">
+<line x1="64" y1="292.0" x2="736" y2="292.0" class="grid"/>
+<text x="54" y="296.0" class="axis" text-anchor="end">0.01 ms</text>
+<line x1="64" y1="212.2" x2="736" y2="212.2" class="grid"/>
+<text x="54" y="216.2" class="axis" text-anchor="end">0.03 ms</text>
+<line x1="64" y1="124.7" x2="736" y2="124.7" class="grid"/>
+<text x="54" y="128.7" class="axis" text-anchor="end">0.1 ms</text>
+<line x1="64" y1="44.9" x2="736" y2="44.9" class="grid"/>
+<text x="54" y="48.9" class="axis" text-anchor="end">0.3 ms</text>
+<line x1="64.0" y1="24" x2="64.0" y2="292" class="grid v"/>
+<text x="64.0" y="314" class="axis" text-anchor="middle">1</text>
+<line x1="352.0" y1="24" x2="352.0" y2="292" class="grid v"/>
+<text x="352.0" y="314" class="axis" text-anchor="middle">8</text>
+<line x1="544.0" y1="24" x2="544.0" y2="292" class="grid v"/>
+<text x="544.0" y="314" class="axis" text-anchor="middle">32</text>
+<line x1="736.0" y1="24" x2="736.0" y2="292" class="grid v"/>
+<text x="736.0" y="314" class="axis" text-anchor="middle">128</text>
+<text x="400" y="332" class="axis" text-anchor="middle">batch size（对数轴）</text>
+<rect x="352.0" y="24" width="192.0" height="268" class="band"/>
+<text x="448.0" y="40" class="band-label" text-anchor="middle">交叉点</text>
+<polyline points="64.0,205.3 352.0,205.3 544.0,193.1 736.0,193.1" fill="none" stroke="#f87171" stroke-width="2.5" stroke-linejoin="round"/>
+<circle cx="64.0" cy="205.3" r="3.5" fill="#f87171"/>
+<circle cx="352.0" cy="205.3" r="3.5" fill="#f87171"/>
+<circle cx="544.0" cy="193.1" r="3.5" fill="#f87171"/>
+<circle cx="736.0" cy="193.1" r="3.5" fill="#f87171"/>
+<polyline points="64.0,189.5 352.0,195.0 544.0,181.1 736.0,181.1" fill="none" stroke="#fbbf24" stroke-width="2.5" stroke-linejoin="round"/>
+<circle cx="64.0" cy="189.5" r="3.5" fill="#fbbf24"/>
+<circle cx="352.0" cy="195.0" r="3.5" fill="#fbbf24"/>
+<circle cx="544.0" cy="181.1" r="3.5" fill="#fbbf24"/>
+<circle cx="736.0" cy="181.1" r="3.5" fill="#fbbf24"/>
+<polyline points="64.0,46.9 352.0,201.0 544.0,161.8 736.0,75.8" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linejoin="round"/>
+<circle cx="64.0" cy="46.9" r="3.5" fill="#94a3b8"/>
+<circle cx="352.0" cy="201.0" r="3.5" fill="#94a3b8"/>
+<circle cx="544.0" cy="161.8" r="3.5" fill="#94a3b8"/>
+<circle cx="736.0" cy="75.8" r="3.5" fill="#94a3b8"/>
+<polyline points="64.0,272.9 352.0,212.2 544.0,169.5 736.0,110.9" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linejoin="round"/>
+<circle cx="64.0" cy="272.9" r="3.5" fill="#34d399"/>
+<circle cx="352.0" cy="212.2" r="3.5" fill="#34d399"/>
+<circle cx="544.0" cy="169.5" r="3.5" fill="#34d399"/>
+<circle cx="736.0" cy="110.9" r="3.5" fill="#34d399"/>
+</svg>
+    <div class="legend"><span class="lg"><i style="background:#f87171"></i>PyTorch · GPU</span><span class="lg"><i style="background:#fbbf24"></i>ONNX Runtime · GPU</span><span class="lg"><i style="background:#94a3b8"></i>PyTorch · CPU</span><span class="lg"><i style="background:#34d399"></i>ONNX Runtime · CPU</span></div>
+    <div class="note">对数坐标。绿带为 CPU/GPU 交叉区（batch 8–32）：左侧 CPU 更快，右侧 GPU 才回本。</div>
+  </div>
+
+  <h2>batch = 1（部署形态）· 1000 次采样</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>后端</th><th class="num">p50</th><th class="num">p99</th><th class="num">抖动 σ</th><th style="width:34%">相对延迟</th></tr></thead>
+      <tbody><tr><td>PyTorch · GPU</td><td class="num"><b>33 µs</b></td><td class="num">55 µs</td><td class="num">22.0 µs</td><td><span class="bar" style="width:11%;background:#f87171"></span></td></tr><tr><td>ONNX Runtime · GPU</td><td class="num"><b>30 µs</b></td><td class="num">36 µs</td><td class="num">1.0 µs</td><td><span class="bar" style="width:10%;background:#fbbf24"></span></td></tr><tr><td>PyTorch · CPU</td><td class="num"><b>299 µs</b></td><td class="num">463 µs</td><td class="num">40.0 µs</td><td><span class="bar" style="width:100%;background:#94a3b8"></span></td></tr><tr class="best"><td>ONNX Runtime · CPU</td><td class="num"><b>13 µs</b></td><td class="num">15 µs</td><td class="num">2.0 µs</td><td><span class="bar" style="width:4%;background:#34d399"></span></td></tr></tbody>
+    </table>
+    <div class="note">抖动 σ 比平均延迟更值得看：torch-cuda 的 wall-clock p99 达到 p50 的 5.3 倍，在控制环里会表现为偶发掉帧。</div>
+  </div>
+
+  <h2>batch 扫描（p50，毫秒）</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th class="num">batch</th><th class="num">torch·GPU</th><th class="num">ORT·GPU</th><th class="num">torch·CPU</th><th class="num">ORT·CPU</th><th>最快</th></tr></thead>
+      <tbody><tr><td class="num"><b>1</b></td><td class="num">0.033</td><td class="num">0.041</td><td class="num">0.292</td><td class="num win">0.013</td><td>ONNX Runtime · CPU</td></tr><tr><td class="num"><b>8</b></td><td class="num">0.033</td><td class="num">0.038</td><td class="num">0.035</td><td class="num win">0.030</td><td>ONNX Runtime · CPU</td></tr><tr><td class="num"><b>32</b></td><td class="num win">0.039</td><td class="num">0.046</td><td class="num">0.060</td><td class="num">0.054</td><td>PyTorch · GPU</td></tr><tr><td class="num"><b>128</b></td><td class="num win">0.039</td><td class="num">0.046</td><td class="num">0.196</td><td class="num">0.121</td><td>PyTorch · GPU</td></tr></tbody>
+    </table>
+  </div>
+
+  <h2>为什么会有这个结果</h2>
+  <div class="card">
+    <table>
+      <tbody>
+        <tr><td>网络计算量</td><td class="num">47×512 + 512×256 + 256×128 + 128×12 = <b>189,440 MACs（0.38 MFLOPs）</b></td></tr>
+        <tr><td>4080S 理论计算时间</td><td class="num">≈ 0.0095 µs</td></tr>
+        <tr><td>实测 GPU 延迟</td><td class="num">≈ 30 µs</td></tr>
+        <tr><td>开销占比</td><td class="num"><b>99.9%</b></td></tr>
+      </tbody>
+    </table>
+    <div class="note">一次 CUDA 内核启动（20–30 µs）比整个网络的计算量大 3000 倍。CPU 侧理论 7.6 µs、实测 13 µs，总数仍低于 GPU 的启动开销。</div>
+  </div>
+
+  <h2>方法（这部分决定结论可不可信）</h2>
+  <div class="card">
+    <ul>
+      <li>预热 100–200 次后才计时 —— 排除首次调用的内核编译/上下文开销</li>
+      <li>CUDA Event 计时 + <code>synchronize</code>；另做 wall-clock 双口径对照</li>
+      <li>输入张量一次分配、循环内复用 —— 不把分配开销算进延迟</li>
+      <li>ONNX Runtime 用 <code>io_binding</code>，输入输出常驻显存 —— 不把 H2D 拷贝算进去</li>
+      <li>报 p50 / p95 / p99 / max / σ，而不是只报均值；隐含上限 = 1000 / p99</li>
+    </ul>
+  </div>
+
+  <h2>结论与边界</h2>
+  <div class="card">
+    <ul>
+      <li><b>小模型实时推理：CPU 胜。</b> batch=1 时 ONNX Runtime + CPU 为 13 µs，是 GPU 方案的 1/3，且抖动最小（σ=2 µs）。</li>
+      <li><b>部署别直跑 TorchScript。</b> 同机同网络下 0.299 ms vs ONNX Runtime 0.013 ms——每调用开销 0.3 ms，是推理本身的 23 倍。</li>
+      <li><b>控制环看抖动，不看均值。</b> 偶发长尾才是真机上"动作不平滑"的来源。</li>
+      <li><b>既有工程得到印证。</b> ORT-CPU 13 µs 只占 50 Hz 控制预算（20 ms）的 0.065%，说明真机延迟来自 CAN 下发、IMU 采样与调度抖动，而非模型推理。</li>
+      <li><b>边界：结论仅限小模型。</b> 上到 VLA / 视觉 backbone 时算力重新成为瓶颈，GPU（+TensorRT）才会回本。</li>
+    </ul>
+  </div>
+
+  <h2>一句话版（面试可用）</h2>
+  <p class="quote">
+    <p>对 19 万参数的四足策略网络做了四后端横向对比（PyTorch JIT / ONNX Runtime × CPU / GPU），自建测量脚本（双口径计时、预热隔离、张量复用、io_binding 免 H2D），并做 batch 1→128 扫描定位交叉点。</p>
+    <p><b>发现：</b>batch=1 时 GPU 的 99.9% 延迟是内核启动开销（30 µs vs 0.01 µs 计算），ORT-CPU 反而最快（13 µs、抖动 2 µs）；交叉点在 batch 8–32，batch 128 时 GPU 快 2.6 倍；TorchScript 每调用开销 0.3 ms，是推理本身的 23 倍。</p>
+    <p>该结论支撑了树莓派 5 上 50 Hz 部署的选型（推理仅占预算 0.065%）。</p>
+    <div class="warn">口径说明：以上为本机（RTX 4080 SUPER）实测数据。"树莓派 5 / 50 Hz" 为既有工程事实，与本次延迟数据相互印证，并非本实验的测试环境。</div>
+  </p>
+
+  <div class="note" style="margin-top:28px">
+    数据来源：<code>BENCH-RESULT.md</code>　·　复现：<code>python3 tools/bench_policy_latency.py --runs 1000 --warmup 200</code>　·　本页由 <code>tools/make-showcase.py</code> 生成
+  </div>
+</div>
+</body>
+</html>
